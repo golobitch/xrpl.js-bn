@@ -1,4 +1,4 @@
-import { Decimal } from 'decimal.js'
+import BigNumber from 'bignumber.js'
 
 import { BinaryParser } from '../serdes/binary-parser'
 
@@ -14,16 +14,18 @@ import { Buffer } from 'buffer/'
 const MIN_IOU_EXPONENT = -96
 const MAX_IOU_EXPONENT = 80
 const MAX_IOU_PRECISION = 16
-const MAX_DROPS = new Decimal('1e17')
-const MIN_XRP = new Decimal('1e-6')
+const MAX_DROPS = new BigNumber('1e17')
+const MIN_XRP = new BigNumber('1e-6')
 const mask = bigInt(0x00000000ffffffff)
 
 /**
  * decimal.js configuration for Amount IOUs
  */
-Decimal.config({
-  toExpPos: MAX_IOU_EXPONENT + MAX_IOU_PRECISION,
-  toExpNeg: MIN_IOU_EXPONENT - MAX_IOU_PRECISION,
+BigNumber.config({
+  EXPONENTIAL_AT: [
+    MIN_IOU_EXPONENT - MAX_IOU_PRECISION,
+    MAX_IOU_EXPONENT + MAX_IOU_PRECISION,
+  ],
 })
 
 /**
@@ -90,14 +92,14 @@ class Amount extends SerializedType {
     }
 
     if (isAmountObject(value)) {
-      const number = new Decimal(value.value)
+      const number = new BigNumber(value.value)
       Amount.assertIouIsValid(number)
 
       if (number.isZero()) {
         amount[0] |= 0x80
       } else {
         const integerNumberString = number
-          .times(`1e${-(number.e - 15)}`)
+          .times(`1e${-((number.e as number) - 15)}`)
           .abs()
           .toString()
 
@@ -110,11 +112,11 @@ class Amount extends SerializedType {
 
         amount[0] |= 0x80
 
-        if (number.gt(new Decimal(0))) {
+        if (number.gt(new BigNumber(0))) {
           amount[0] |= 0x40
         }
 
-        const exponent = number.e - 15
+        const exponent = (number.e as number) - 15
         const exponentByte = 97 + exponent
         amount[0] |= exponentByte >>> 2
         amount[1] |= (exponentByte & 0x03) << 6
@@ -172,7 +174,7 @@ class Amount extends SerializedType {
 
       mantissa[0] = 0
       mantissa[1] &= 0x3f
-      const value = new Decimal(`${sign}0x${mantissa.toString('hex')}`).times(
+      const value = new BigNumber(`${sign}0x${mantissa.toString('hex')}`).times(
         `1e${exponent}`,
       )
       Amount.assertIouIsValid(value)
@@ -196,7 +198,7 @@ class Amount extends SerializedType {
       throw new Error(`${amount.toString()} is an illegal amount`)
     }
 
-    const decimal = new Decimal(amount)
+    const decimal = new BigNumber(amount)
     if (!decimal.isZero()) {
       if (decimal.lt(MIN_XRP) || decimal.gt(MAX_DROPS)) {
         throw new Error(`${amount.toString()} is an illegal amount`)
@@ -210,10 +212,10 @@ class Amount extends SerializedType {
    * @param decimal Decimal.js object representing IOU.value
    * @returns void, but will throw if invalid amount
    */
-  private static assertIouIsValid(decimal: Decimal): void {
+  private static assertIouIsValid(decimal: BigNumber): void {
     if (!decimal.isZero()) {
       const p = decimal.precision()
-      const e = decimal.e - 15
+      const e = (decimal.e as number) - 15
       if (
         p > MAX_IOU_PRECISION ||
         e > MAX_IOU_EXPONENT ||
@@ -232,9 +234,9 @@ class Amount extends SerializedType {
    * @param decimal a Decimal object
    * @returns a string of the object without a decimal
    */
-  private static verifyNoDecimal(decimal: Decimal): void {
+  private static verifyNoDecimal(decimal: BigNumber): void {
     const integerNumberString = decimal
-      .times(`1e${-(decimal.e - 15)}`)
+      .times(`1e${-((decimal.e as number) - 15)}`)
       .abs()
       .toString()
 
